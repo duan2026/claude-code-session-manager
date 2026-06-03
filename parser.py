@@ -6,7 +6,7 @@ Parses Claude Code session files stored in ~/.claude/projects/
 import json
 from pathlib import Path
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -24,6 +24,8 @@ class Session:
     message_count: int = 0
     total_tokens: int = 0
     size_kb: float = 0.0
+    custom_title: str = ""
+    tags: list = field(default_factory=list)
 
 
 
@@ -79,12 +81,13 @@ def parse_session_metadata(file_path: str) -> Optional[Session]:
     )
 
     first_user_found = False
+    ai_title_found = False
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             for i, line in enumerate(f):
-                # After finding the first user message, read a bit more for model info
-                if i > 80 and first_user_found:
+                # After finding the first user message + ai-title, read a bit more
+                if i > 80 and first_user_found and ai_title_found:
                     break
 
                 line = line.strip()
@@ -97,14 +100,22 @@ def parse_session_metadata(file_path: str) -> Optional[Session]:
 
                 msg_type = obj.get("type", "")
 
-                if msg_type == "user":
+                if msg_type == "ai-title":
+                    title = obj.get("aiTitle", "").strip()
+                    if title:
+                        session.first_message = title[:150]
+                        ai_title_found = True
+
+                elif msg_type == "user":
                     session.message_count += 1
                     content = extract_user_content(
                         obj.get("message", {}).get("content", "")
                     )
 
                     if not first_user_found:
-                        session.first_message = content[:150].replace("\n", " ").strip()
+                        # Only use first message as title if no ai-title found yet
+                        if not ai_title_found:
+                            session.first_message = content[:150].replace("\n", " ").strip()
                         ts = obj.get("timestamp")
                         if ts:
                             session.timestamp = parse_timestamp(ts)
@@ -190,6 +201,16 @@ def load_all_sessions() -> list[Session]:
         session = parse_session_metadata(str(jsonl_file))
         if session:
             sessions.append(session)
+
+    # Load user-customized metadata (titles & tags)
+    from metadata import load_metadata
+    meta = load_metadata()
+    for s in sessions:
+        entry = meta.get(s.session_id, {})
+        custom_title = entry.get("title", "")
+        if custom_title:
+            s.custom_title = custom_title
+        s.tags = entry.get("tags", [])
 
     # Sort by last_active, most recent first
     sessions.sort(key=lambda s: s.last_active or datetime.min, reverse=True)

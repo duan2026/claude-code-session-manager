@@ -70,6 +70,28 @@ QMainWindow, QWidget {
     border-right: 1px solid #d0d7de;
 }
 
+/* === Left Tab Buttons === */
+#leftTabBtn {
+    background-color: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 8px 12px;
+    font-size: 24px;
+    font-weight: 500;
+    color: #656d76;
+}
+#leftTabBtn:hover {
+    color: #1f2328;
+    background-color: transparent;
+    border-color: transparent;
+}
+#leftTabBtn[active="true"] {
+    color: #1f2328;
+    font-weight: 700;
+    border-bottom-color: #0969da;
+}
+
 #sectionLabel {
     color: #1f2328;
     font-size: 24px;
@@ -227,6 +249,34 @@ QSplitter::handle {
     background-color: #d0d7de;
     width: 2px;
 }
+
+/* === Tag Pills === */
+#tagPill {
+    background-color: #ddf4ff;
+    color: #0969da;
+    border: 1px solid #a5d6ff;
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 20px;
+    font-weight: 500;
+}
+
+/* === Tag Filter Checkboxes === */
+#tagFilterCb {
+    font-size: 24px;
+    spacing: 6px;
+    padding: 4px 6px;
+}
+#tagFilterCb::indicator {
+    width: 20px;
+    height: 20px;
+}
+
+/* === Tag Scroll Area === */
+#tagScroll {
+    background-color: transparent;
+    border: none;
+}
 """
 
 GITHUB_DARK = """
@@ -294,6 +344,28 @@ QMainWindow, QWidget {
 #projectPanel {
     background-color: #161b22;
     border-right: 1px solid #30363d;
+}
+
+/* === Left Tab Buttons === */
+#leftTabBtn {
+    background-color: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 8px 12px;
+    font-size: 24px;
+    font-weight: 500;
+    color: #8b949e;
+}
+#leftTabBtn:hover {
+    color: #e6edf3;
+    background-color: transparent;
+    border-color: transparent;
+}
+#leftTabBtn[active="true"] {
+    color: #e6edf3;
+    font-weight: 700;
+    border-bottom-color: #58a6ff;
 }
 
 #sectionLabel {
@@ -452,5 +524,33 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
 QSplitter::handle {
     background-color: #30363d;
     width: 2px;
+}
+
+/* === Tag Pills === */
+#tagPill {
+    background-color: #1f3a5f;
+    color: #58a6ff;
+    border: 1px solid #1f3a5f;
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-size: 20px;
+    font-weight: 500;
+}
+
+/* === Tag Filter Checkboxes === */
+#tagFilterCb {
+    font-size: 24px;
+    spacing: 6px;
+    padding: 4px 6px;
+}
+#tagFilterCb::indicator {
+    width: 20px;
+    height: 20px;
+}
+
+/* === Tag Scroll Area === */
+#tagScroll {
+    background-color: transparent;
+    border: none;
 }
 """
