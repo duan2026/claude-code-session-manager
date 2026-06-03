@@ -29,20 +29,21 @@ from PyQt5.QtWidgets import (
     QFrame,
     QStackedWidget,
 )
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, pyqtBoundSignal
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 
 from parser import Session, load_all_sessions, load_session_messages, search_sessions
-from metadata import get_title, set_title, get_tags, set_tags, get_all_tags, load_metadata
+from metadata import set_title, set_tags, get_all_tags
 from theme import GITHUB_LIGHT, GITHUB_DARK
+from i18n import LANGS, Lang
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
 
-def format_time(dt: datetime | None) -> str:
+def format_time(dt: datetime | None, t: Lang) -> str:
     """Human-readable relative time."""
     if not dt or dt == datetime.min:
-        return "未知"
+        return t.time_unknown
     now = datetime.now(dt.tzinfo)
     diff = now - dt
     if diff.days < 0:
@@ -51,14 +52,14 @@ def format_time(dt: datetime | None) -> str:
         hours = diff.seconds // 3600
         if hours == 0:
             mins = diff.seconds // 60
-            return f"{mins} 分钟前" if mins > 0 else "刚刚"
-        return f"{hours} 小时前"
+            return t.time_minutes_ago.format(n=mins) if mins > 0 else t.time_just_now
+        return t.time_hours_ago.format(n=hours)
     if diff.days == 1:
-        return "昨天"
+        return t.time_yesterday
     if diff.days < 7:
-        return f"{diff.days} 天前"
+        return t.time_days_ago.format(n=diff.days)
     if diff.days < 30:
-        return f"{diff.days // 7} 周前"
+        return t.time_weeks_ago.format(n=diff.days // 7)
     return dt.strftime("%Y/%m/%d")
 
 
@@ -67,38 +68,6 @@ def shorten_path(path: str, max_len: int = 35) -> str:
     if len(path) <= max_len:
         return path
     return "..." + path[-(max_len - 3):]
-
-
-def get_project_display(path: str) -> str:
-    """Get a short display name for a project path - last 1-2 directory names."""
-    p = path.rstrip("\\/")
-    parts = p.replace("/", "\\").split("\\")
-    if len(parts) >= 2:
-        return parts[-2] + "\\" + parts[-1]
-    return parts[-1] if parts else path
-
-
-def resolve_display_names(display_names: dict[str, str]) -> dict[str, str]:
-    """
-    Resolve duplicate display names by showing more path context.
-    e.g. two projects both showing "workspace\teaching-book-agent"
-    will become "D:\\workspace\\teaching-book-agent" and "...\\teaching-book-agent-opencode"
-    """
-    # Check for collisions
-    name_to_keys: dict[str, list[str]] = {}
-    for key, full_path in display_names.items():
-        short = get_project_display(full_path)
-        name_to_keys.setdefault(short, []).append(key)
-
-    result = {}
-    for key, full_path in display_names.items():
-        short = get_project_display(full_path)
-        if len(name_to_keys[short]) > 1:
-            # Collision: use full path instead
-            result[key] = full_path
-        else:
-            result[key] = short
-    return result
 
 
 def format_tokens(n: int) -> str:
@@ -128,11 +97,12 @@ class SessionLoader(QThread):
 class SessionCard(QWidget):
     """A single session card displayed in the session list."""
 
-    title_changed = pyqtSignal(str)  # emits session_id when title edited
+    title_changed = pyqtSignal(str)
 
-    def __init__(self, session: Session, parent=None):
+    def __init__(self, session: Session, lang: Lang, parent=None):
         super().__init__(parent)
         self.session = session
+        self.lang = lang
         self._build_ui()
 
     def _build_ui(self):
@@ -140,17 +110,15 @@ class SessionCard(QWidget):
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(3)
 
-        # Title - custom title or AI-generated title
         title_text = self.session.custom_title or self.session.first_message
         self.title_label = QLabel(title_text[:90])
         self.title_label.setObjectName("cardTitle")
         self.title_label.setWordWrap(False)
-        self.title_label.setToolTip("双击编辑标题")
+        self.title_label.setToolTip(self.lang.edit_title_dialog)
         self.title_label.mouseDoubleClickEvent = self._on_title_double_click
         layout.addWidget(self.title_label)
 
-        # Meta line
-        time_str = format_time(self.session.last_active)
+        time_str = format_time(self.session.last_active, self.lang)
         tokens_str = format_tokens(self.session.total_tokens)
         parts = [shorten_path(self.session.cwd)]
         if self.session.model:
@@ -164,7 +132,6 @@ class SessionCard(QWidget):
         self.meta_label.setObjectName("cardMeta")
         layout.addWidget(self.meta_label)
 
-        # Tags row
         if self.session.tags:
             tags_layout = QHBoxLayout()
             tags_layout.setSpacing(4)
@@ -177,10 +144,9 @@ class SessionCard(QWidget):
             layout.addLayout(tags_layout)
 
     def _on_title_double_click(self, event):
-        """Double-click on title to edit it."""
         current = self.session.custom_title or self.session.first_message
         new_title, ok = QInputDialog.getText(
-            self, "编辑标题", "输入新标题:", text=current
+            self, self.lang.edit_title_dialog, self.lang.edit_title_prompt, text=current
         )
         if ok and new_title.strip():
             new_title = new_title.strip()
@@ -195,29 +161,28 @@ class SessionCard(QWidget):
 class TagDialog(QDialog):
     """Dialog for managing tags on a session."""
 
-    def __init__(self, session: Session, all_tags: list[str], parent=None):
+    def __init__(self, session: Session, all_tags: list[str], lang: Lang, parent=None):
         super().__init__(parent)
         self.session = session
         self.all_tags = all_tags
+        self.lang = lang
         self.result_tags: list[str] = []
         self._build_ui()
 
     def _build_ui(self):
-        self.setWindowTitle("管理标签")
+        self.setWindowTitle(self.lang.tag_dialog_title)
         self.setMinimumWidth(420)
         self.setMinimumHeight(350)
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        # Session title info
         title_text = self.session.custom_title or self.session.first_message
         info = QLabel(f"📝 {title_text[:60]}")
         info.setWordWrap(True)
         info.setObjectName("cardMeta")
         layout.addWidget(info)
 
-        # Existing tags as checkboxes
-        layout.addWidget(QLabel("已有标签（勾选保留，取消移除）："))
+        layout.addWidget(QLabel(self.lang.tag_dialog_existing))
         self.tag_checks: dict[str, QCheckBox] = {}
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -234,23 +199,21 @@ class TagDialog(QDialog):
         scroll.setWidget(self._scroll_widget)
         layout.addWidget(scroll, 1)
 
-        # New tag input
         new_layout = QHBoxLayout()
         self.new_tag_input = QLineEdit()
-        self.new_tag_input.setPlaceholderText("输入新标签，回车添加")
+        self.new_tag_input.setPlaceholderText(self.lang.tag_dialog_new_placeholder)
         self.new_tag_input.returnPressed.connect(self._add_new_tag)
-        add_btn = QPushButton("添加")
+        add_btn = QPushButton(self.lang.tag_dialog_add)
         add_btn.clicked.connect(self._add_new_tag)
         new_layout.addWidget(self.new_tag_input, 1)
         new_layout.addWidget(add_btn)
         layout.addLayout(new_layout)
 
-        # OK / Cancel
         btn_layout = QHBoxLayout()
-        ok_btn = QPushButton("确定")
+        ok_btn = QPushButton(self.lang.tag_dialog_ok)
         ok_btn.setObjectName("primaryBtn")
         ok_btn.clicked.connect(self._accept)
-        cancel_btn = QPushButton("取消")
+        cancel_btn = QPushButton(self.lang.tag_dialog_cancel)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addStretch()
         btn_layout.addWidget(ok_btn)
@@ -267,7 +230,6 @@ class TagDialog(QDialog):
             cb = QCheckBox(tag)
             cb.setChecked(True)
             self.tag_checks[tag] = cb
-            # Insert before the stretch item
             count = self._tags_layout.count()
             self._tags_layout.insertWidget(count - 1, cb)
         self.new_tag_input.clear()
@@ -283,12 +245,14 @@ class CCSessionManager(QMainWindow):
     def __init__(self):
         super().__init__()
         self.sessions: list[Session] = []
-        self.all_sessions: list[Session] = []  # including subagents
+        self.all_sessions: list[Session] = []
         self.filtered_sessions: list[Session] = []
         self.current_session: Session | None = None
         self.is_dark = False
         self.show_subagents = False
-        self.selected_tags: set[str] = set()  # currently checked tags for filtering
+        self.selected_tags: set[str] = set()
+        self.lang_code = "zh"
+        self.t = LANGS[self.lang_code]
 
         self._init_ui()
         self._load_sessions()
@@ -296,7 +260,8 @@ class CCSessionManager(QMainWindow):
     # ── UI Setup ─────────────────────────────────────────────────────────
 
     def _init_ui(self):
-        self.setWindowTitle("CC Session Manager")
+        t = self.t
+        self.setWindowTitle(t.window_title)
         self.setMinimumSize(1200, 750)
         self.resize(1400, 900)
 
@@ -312,32 +277,39 @@ class CCSessionManager(QMainWindow):
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(16, 8, 16, 8)
 
-        title = QLabel("CC Session Manager")
-        title.setObjectName("titleLabel")
+        self.title_label = QLabel(t.app_title)
+        self.title_label.setObjectName("titleLabel")
 
         self.search_bar = QLineEdit()
         self.search_bar.setObjectName("searchBar")
-        self.search_bar.setPlaceholderText("搜索对话内容、项目路径、Session ID...")
+        self.search_bar.setPlaceholderText(t.search_placeholder)
         self.search_bar.textChanged.connect(self._on_search)
+
+        self.lang_btn = QPushButton("EN")
+        self.lang_btn.setObjectName("langBtn")
+        self.lang_btn.setFixedSize(56, 48)
+        self.lang_btn.setToolTip("Switch language / 切换语言")
+        self.lang_btn.clicked.connect(self._toggle_lang)
 
         self.theme_btn = QPushButton("🌙")
         self.theme_btn.setObjectName("themeBtn")
         self.theme_btn.setFixedSize(56, 48)
-        self.theme_btn.setToolTip("切换亮色/暗色主题")
+        self.theme_btn.setToolTip(t.theme_tooltip)
         self.theme_btn.clicked.connect(self._toggle_theme)
 
-        self.subagent_cb = QCheckBox("显示子代理")
-        self.subagent_cb.setObjectName("subagentCb")
-        self.subagent_cb.setToolTip("是否显示 subagents 目录下的会话")
-        self.subagent_cb.setChecked(False)
-        self.subagent_cb.toggled.connect(self._toggle_subagents)
+        self.subagent_btn = QPushButton(t.btn_subagent_off)
+        self.subagent_btn.setObjectName("subagentBtn")
+        self.subagent_btn.setToolTip(t.subagents_tooltip)
+        self.subagent_btn.setProperty("active", False)
+        self.subagent_btn.clicked.connect(self._toggle_subagents)
 
-        top_layout.addWidget(title)
+        top_layout.addWidget(self.title_label)
         top_layout.addSpacing(16)
         top_layout.addWidget(self.search_bar, 1)
         top_layout.addSpacing(8)
-        top_layout.addWidget(self.subagent_cb)
+        top_layout.addWidget(self.subagent_btn)
         top_layout.addSpacing(4)
+        top_layout.addWidget(self.lang_btn)
         top_layout.addWidget(self.theme_btn)
 
         root.addWidget(top_bar)
@@ -346,7 +318,7 @@ class CCSessionManager(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
         splitter.setChildrenCollapsible(False)
 
-        # Left panel - project filter + tag filter
+        # Left panel
         left_panel = QWidget()
         left_panel.setObjectName("projectPanel")
         left_panel.setMinimumWidth(300)
@@ -356,17 +328,17 @@ class CCSessionManager(QMainWindow):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
 
-        # Tab switcher: Projects / Tags
+        # Tab switcher
         tab_bar = QHBoxLayout()
         tab_bar.setContentsMargins(8, 6, 8, 0)
         tab_bar.setSpacing(0)
 
-        self.proj_tab_btn = QPushButton("📁 项目")
+        self.proj_tab_btn = QPushButton(t.tab_projects)
         self.proj_tab_btn.setObjectName("leftTabBtn")
         self.proj_tab_btn.setProperty("active", True)
         self.proj_tab_btn.clicked.connect(lambda: self._switch_left_tab("projects"))
 
-        self.tag_tab_btn = QPushButton("🏷 标签")
+        self.tag_tab_btn = QPushButton(t.tab_tags)
         self.tag_tab_btn.setObjectName("leftTabBtn")
         self.tag_tab_btn.setProperty("active", False)
         self.tag_tab_btn.clicked.connect(lambda: self._switch_left_tab("tags"))
@@ -375,11 +347,10 @@ class CCSessionManager(QMainWindow):
         tab_bar.addWidget(self.tag_tab_btn)
         left_layout.addLayout(tab_bar)
 
-        # Stacked content
         self.left_stack = QStackedWidget()
         left_layout.addWidget(self.left_stack)
 
-        # -- Page 0: Projects --
+        # Page 0: Projects
         proj_container = QWidget()
         proj_layout = QVBoxLayout(proj_container)
         proj_layout.setContentsMargins(0, 0, 0, 0)
@@ -392,7 +363,7 @@ class CCSessionManager(QMainWindow):
 
         self.left_stack.addWidget(proj_container)
 
-        # -- Page 1: Tags --
+        # Page 1: Tags
         tag_container = QWidget()
         tag_layout = QVBoxLayout(tag_container)
         tag_layout.setContentsMargins(0, 0, 0, 0)
@@ -421,39 +392,36 @@ class CCSessionManager(QMainWindow):
         right_layout.setContentsMargins(12, 8, 12, 10)
         right_layout.setSpacing(8)
 
-        # Session list
         self.session_list = QListWidget()
         self.session_list.setObjectName("sessionList")
         self.session_list.currentRowChanged.connect(self._on_session_select)
         right_layout.addWidget(self.session_list, 1)
 
-        # Preview label
-        preview_header = QLabel("💬 对话预览")
-        preview_header.setObjectName("sectionLabel")
-        right_layout.addWidget(preview_header)
+        self.preview_header = QLabel(t.preview_header)
+        self.preview_header.setObjectName("sectionLabel")
+        right_layout.addWidget(self.preview_header)
 
-        # Preview panel
         self.preview = QTextBrowser()
         self.preview.setObjectName("previewPanel")
         self.preview.setOpenExternalLinks(False)
         self.preview.setMaximumHeight(280)
-        self.preview.setPlaceholderText("点击上方对话查看预览...")
+        self.preview.setPlaceholderText(t.preview_placeholder)
         right_layout.addWidget(self.preview)
 
         # Action buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self.resume_btn = QPushButton("▶ 在终端中 Resume")
+        self.resume_btn = QPushButton(t.btn_resume)
         self.resume_btn.setObjectName("primaryBtn")
         self.resume_btn.clicked.connect(self._resume_session)
         self.resume_btn.setEnabled(False)
 
-        self.copy_btn = QPushButton("📋 复制命令")
+        self.copy_btn = QPushButton(t.btn_copy)
         self.copy_btn.clicked.connect(self._copy_resume_cmd)
         self.copy_btn.setEnabled(False)
 
-        self.tag_btn = QPushButton("🏷 标签")
+        self.tag_btn = QPushButton(t.btn_tag)
         self.tag_btn.clicked.connect(self._manage_tags)
         self.tag_btn.setEnabled(False)
 
@@ -462,7 +430,7 @@ class CCSessionManager(QMainWindow):
         btn_row.addWidget(self.tag_btn)
         btn_row.addStretch()
 
-        self.delete_btn = QPushButton("🗑 删除")
+        self.delete_btn = QPushButton(t.btn_delete)
         self.delete_btn.setObjectName("dangerBtn")
         self.delete_btn.clicked.connect(self._delete_session)
         self.delete_btn.setEnabled(False)
@@ -470,8 +438,7 @@ class CCSessionManager(QMainWindow):
 
         right_layout.addLayout(btn_row)
 
-        # Status
-        self.status_label = QLabel("加载中...")
+        self.status_label = QLabel(t.status_loading)
         self.status_label.setObjectName("statusLabel")
         right_layout.addWidget(self.status_label)
 
@@ -481,14 +448,64 @@ class CCSessionManager(QMainWindow):
         splitter.setSizes([450, 950])
 
         root.addWidget(splitter, 1)
-
-        # Apply initial theme
         self._apply_theme()
+
+    # ── Language Toggle ──────────────────────────────────────────────────
+
+    def _toggle_lang(self):
+        self.lang_code = "en" if self.lang_code == "zh" else "zh"
+        self.t = LANGS[self.lang_code]
+        self.lang_btn.setText("中" if self.lang_code == "en" else "EN")
+        self._refresh_ui_text()
+
+    def _refresh_ui_text(self):
+        """Update all visible text after language switch."""
+        t = self.t
+
+        self.setWindowTitle(t.window_title)
+        self.title_label.setText(t.app_title)
+        self.search_bar.setPlaceholderText(t.search_placeholder)
+        self.theme_btn.setToolTip(t.theme_tooltip)
+        self.subagent_btn.setToolTip(t.subagents_tooltip)
+        self.subagent_btn.setText(t.btn_subagent_on if self.show_subagents else t.btn_subagent_off)
+        self.proj_tab_btn.setText(t.tab_projects)
+        self.tag_tab_btn.setText(t.tab_tags)
+        self.preview_header.setText(t.preview_header)
+        self.preview.setPlaceholderText(t.preview_placeholder)
+        self.resume_btn.setText(t.btn_resume)
+        self.copy_btn.setText(t.btn_copy)
+        self.tag_btn.setText(t.btn_tag)
+        self.delete_btn.setText(t.btn_delete)
+
+        # Refresh dynamic content
+        self._populate_projects()
+        self._populate_tags()
+        self._populate_sessions()
+        self._update_status()
+
+    def _update_status(self):
+        """Refresh status label based on current state."""
+        t = self.t
+        total = len(self.sessions)
+        shown = len(self.filtered_sessions)
+        text = self.search_bar.text()
+        project = self._get_current_project()
+
+        if shown == 0 and (text or project != "__all__" or self.selected_tags):
+            self.status_label.setText(t.status_no_match)
+        elif text or project != "__all__" or self.selected_tags:
+            self.status_label.setText(t.status_filtering.format(shown=shown, total=total))
+        else:
+            if self.show_subagents:
+                self.status_label.setText(t.status_loaded_with_sub.format(count=total))
+            else:
+                sub_count = len(self.all_sessions) - total
+                self.status_label.setText(t.status_loaded_hidden_sub.format(count=total, hidden=sub_count))
 
     # ── Data Loading ─────────────────────────────────────────────────────
 
     def _load_sessions(self):
-        self.status_label.setText("⏳ 正在扫描 sessions...")
+        self.status_label.setText(self.t.status_loading)
         self._loader = SessionLoader()
         self._loader.loaded.connect(self._on_sessions_loaded)
         self._loader.start()
@@ -497,32 +514,33 @@ class CCSessionManager(QMainWindow):
         self.all_sessions = sessions
         self.sessions = self._filter_subagents(sessions)
         self.filtered_sessions = self.sessions.copy()
-        self.status_label.setText(f"✅ 共 {len(self.sessions)} 个 sessions")
         self._populate_projects()
         self._populate_tags()
         self._populate_sessions()
+        self._update_status()
 
     def _filter_subagents(self, sessions: list[Session]) -> list[Session]:
-        """Filter out subagent sessions based on toggle."""
         if self.show_subagents:
             return sessions
         return [s for s in sessions if s.project_key != "subagents"]
 
-    def _toggle_subagents(self, checked: bool):
-        """Toggle subagent visibility."""
-        self.show_subagents = checked
+    def _toggle_subagents(self):
+        self.show_subagents = not self.show_subagents
+        t = self.t
+        if self.show_subagents:
+            self.subagent_btn.setText(t.btn_subagent_on)
+            self.subagent_btn.setProperty("active", True)
+        else:
+            self.subagent_btn.setText(t.btn_subagent_off)
+            self.subagent_btn.setProperty("active", False)
+        self.subagent_btn.style().unpolish(self.subagent_btn)
+        self.subagent_btn.style().polish(self.subagent_btn)
         self.sessions = self._filter_subagents(self.all_sessions)
         self._on_search(self.search_bar.text())
-        total = len(self.all_sessions)
-        shown = len(self.sessions)
-        if checked:
-            self.status_label.setText(f"✅ 共 {shown} 个 sessions（含子代理）")
-        else:
-            sub_count = total - shown
-            self.status_label.setText(f"✅ 共 {shown} 个 sessions（已隐藏 {sub_count} 个子代理）")
         self._populate_projects()
         self._populate_tags()
         self._populate_sessions()
+        self._update_status()
 
     # ── Project List ─────────────────────────────────────────────────────
 
@@ -530,22 +548,18 @@ class CCSessionManager(QMainWindow):
         self.project_list.blockSignals(True)
         self.project_list.clear()
 
-        # Group by project_key, collect display name from project_dir (cwd)
         counts: dict[str, int] = {}
         display_names: dict[str, str] = {}
         for s in self.sessions:
             key = s.project_key
             counts[key] = counts.get(key, 0) + 1
-            # Use the shortest cwd as the display name (most likely the root)
             if key not in display_names or len(s.project_dir) < len(display_names[key]):
                 display_names[key] = s.project_dir
 
-        # "All" item
         all_item = QListWidgetItem(f"📋 全部  ({len(self.sessions)})")
         all_item.setData(Qt.UserRole, "__all__")
         self.project_list.addItem(all_item)
 
-        # Per-project items, sorted by count
         for key, count in sorted(counts.items(), key=lambda x: -x[1]):
             full_path = display_names.get(key, key)
             item = QListWidgetItem(f"📁 {full_path}  ({count})")
@@ -559,27 +573,23 @@ class CCSessionManager(QMainWindow):
     # ── Tag Filter Panel ──────────────────────────────────────────────────
 
     def _populate_tags(self):
-        """Populate tag checkboxes in the left panel."""
-        # Clear existing widgets (keep the stretch at the end)
         while self.tag_check_layout.count():
             item = self.tag_check_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        # Collect tag counts from current sessions
         tag_counts: dict[str, int] = {}
         for s in self.sessions:
             for tag in s.tags:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
         if not tag_counts:
-            no_tags = QLabel("暂无标签")
+            no_tags = QLabel(self.t.tag_no_tags)
             no_tags.setObjectName("cardMeta")
             self.tag_check_layout.addWidget(no_tags)
             self.tag_check_layout.addStretch()
             return
 
-        # Sort by count descending
         for tag, count in sorted(tag_counts.items(), key=lambda x: -x[1]):
             cb = QCheckBox(f"{tag}  ({count})")
             cb.setObjectName("tagFilterCb")
@@ -590,7 +600,6 @@ class CCSessionManager(QMainWindow):
         self.tag_check_layout.addStretch()
 
     def _on_tag_filter_toggled(self, tag: str, checked: bool):
-        """Handle tag checkbox toggle in filter panel."""
         if checked:
             self.selected_tags.add(tag)
         else:
@@ -598,7 +607,6 @@ class CCSessionManager(QMainWindow):
         self._on_search(self.search_bar.text())
 
     def _switch_left_tab(self, tab: str):
-        """Switch between projects and tags view in left panel."""
         if tab == "projects":
             self.left_stack.setCurrentIndex(0)
             self.proj_tab_btn.setProperty("active", True)
@@ -607,7 +615,6 @@ class CCSessionManager(QMainWindow):
             self.left_stack.setCurrentIndex(1)
             self.proj_tab_btn.setProperty("active", False)
             self.tag_tab_btn.setProperty("active", True)
-        # Force style refresh
         self.proj_tab_btn.style().unpolish(self.proj_tab_btn)
         self.proj_tab_btn.style().polish(self.proj_tab_btn)
         self.tag_tab_btn.style().unpolish(self.tag_tab_btn)
@@ -621,16 +628,15 @@ class CCSessionManager(QMainWindow):
         for s in self.filtered_sessions:
             item = QListWidgetItem()
             item.setData(Qt.UserRole, s.session_id)
-            # Taller card if has tags
             height = 100 if s.tags else 80
             item.setSizeHint(QSize(0, height))
 
-            card = SessionCard(s)
+            card = SessionCard(s, self.t)
             self.session_list.addItem(item)
             self.session_list.setItemWidget(item, card)
 
         if not self.filtered_sessions:
-            self.status_label.setText("没有找到匹配的 sessions")
+            self.status_label.setText(self.t.status_no_match)
 
     # ── Search & Filter ──────────────────────────────────────────────────
 
@@ -644,7 +650,6 @@ class CCSessionManager(QMainWindow):
         project = self._get_current_project()
         self.filtered_sessions = search_sessions(self.sessions, text, project)
 
-        # Apply tag filter (AND: session must have ALL checked tags)
         if self.selected_tags:
             self.filtered_sessions = [
                 s for s in self.filtered_sessions
@@ -652,12 +657,7 @@ class CCSessionManager(QMainWindow):
             ]
 
         self._populate_sessions()
-        total = len(self.sessions)
-        shown = len(self.filtered_sessions)
-        if text or project != "__all__" or self.selected_tags:
-            self.status_label.setText(f"🔍 显示 {shown} / {total} 个 sessions")
-        else:
-            self.status_label.setText(f"✅ 共 {total} 个 sessions")
+        self._update_status()
 
     def _on_project_filter(self, _row: int):
         self._on_search(self.search_bar.text())
@@ -676,10 +676,8 @@ class CCSessionManager(QMainWindow):
         session = self.filtered_sessions[row]
         self.current_session = session
 
-        # Load full messages in background? No - it's fast enough for preview.
         messages = load_session_messages(session.file_path)
 
-        # Render HTML
         is_dark = self.is_dark
         user_bg = "#161b22" if is_dark else "#f6f8fa"
         border_color = "#30363d" if is_dark else "#d0d7de"
@@ -695,7 +693,6 @@ class CCSessionManager(QMainWindow):
                 .replace(">", "&gt;")
                 .replace("\n", "<br>")
             )
-            # Truncate very long messages in preview
             if len(content_html) > 600:
                 content_html = content_html[:600] + "..."
 
@@ -704,7 +701,7 @@ class CCSessionManager(QMainWindow):
                     f'<div style="margin: 8px 0; padding: 8px 12px; '
                     f'background: {user_bg}; border: 1px solid {border_color}; '
                     f'border-radius: 8px;">'
-                    f'<b style="font-size: 22px; color: {dim_color};">👤 你</b><br>'
+                    f'<b style="font-size: 22px; color: {dim_color};">👤 You</b><br>'
                     f'<span style="font-size: 26px;">{content_html}</span></div>'
                 )
             else:
@@ -715,12 +712,12 @@ class CCSessionManager(QMainWindow):
                 )
 
         if not messages:
-            html_parts.append(f'<i style="color: {dim_color};">无对话内容</i>')
+            html_parts.append(f'<i style="color: {dim_color};">No messages</i>')
 
         if len(messages) > 30:
             html_parts.append(
                 f'<div style="text-align: center; color: {dim_color}; padding: 8px;">'
-                f"... 还有 {len(messages) - 30} 条消息</div>"
+                f"... +{len(messages) - 30} more messages</div>"
             )
 
         html_parts.append("</div>")
@@ -734,7 +731,6 @@ class CCSessionManager(QMainWindow):
     # ── Actions ──────────────────────────────────────────────────────────
 
     def _resume_session(self):
-        """Open a terminal and run claude --resume."""
         if not self.current_session:
             return
 
@@ -742,7 +738,6 @@ class CCSessionManager(QMainWindow):
         cmd = f"claude --resume {s.session_id}"
         cwd = s.cwd if s.cwd and Path(s.cwd).exists() else str(Path.home())
 
-        # Try Windows Terminal first, fallback to cmd
         try:
             subprocess.Popen(
                 ["wt.exe", "-d", cwd, "--", "cmd.exe", "/k", cmd],
@@ -755,29 +750,28 @@ class CCSessionManager(QMainWindow):
                     cwd=cwd,
                 )
             except Exception as e:
-                QMessageBox.warning(self, "错误", f"无法打开终端:\n{e}")
+                QMessageBox.warning(self, "Error", self.t.error_terminal.format(err=e))
 
     def _copy_resume_cmd(self):
-        """Copy resume command to clipboard."""
         if not self.current_session:
             return
 
         cmd = f"claude --resume {self.current_session.session_id}"
         QApplication.clipboard().setText(cmd)
-        self.status_label.setText(f"✅ 已复制: {cmd}")
+        self.status_label.setText(self.t.status_copied.format(cmd=cmd))
 
     def _delete_session(self):
-        """Delete a session file after confirmation."""
         if not self.current_session:
             return
 
         s = self.current_session
+        t = self.t
         reply = QMessageBox.question(
             self,
-            "确认删除",
-            f"确定要删除这个 session 吗？\n\n"
+            t.delete_title,
+            f"{t.delete_message}\n\n"
             f"{s.first_message[:80]}\n\n"
-            f"文件: {s.session_id}.jsonl",
+            f"{t.delete_file} {s.session_id}.jsonl",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
@@ -787,25 +781,24 @@ class CCSessionManager(QMainWindow):
                 Path(s.file_path).unlink()
                 self.sessions = [x for x in self.sessions if x.session_id != s.session_id]
                 self._on_sessions_loaded(self.sessions)
-                self.status_label.setText("✅ Session 已删除")
+                self.status_label.setText(t.status_deleted)
             except Exception as e:
-                QMessageBox.warning(self, "删除失败", str(e))
+                QMessageBox.warning(self, t.error_delete, str(e))
 
     def _manage_tags(self):
-        """Open tag management dialog for the current session."""
         if not self.current_session:
             return
 
         all_tags = get_all_tags()
-        dialog = TagDialog(self.current_session, all_tags, self)
+        dialog = TagDialog(self.current_session, all_tags, self.t, self)
         if dialog.exec_() == QDialog.Accepted:
             new_tags = dialog.result_tags
             set_tags(self.current_session.session_id, new_tags)
             self.current_session.tags = new_tags
-            # Refresh tag panel and session list
             self._populate_tags()
             self._populate_sessions()
-            self.status_label.setText(f"✅ 已更新标签: {', '.join(new_tags) if new_tags else '无标签'}")
+            tags_str = ", ".join(new_tags) if new_tags else "—"
+            self.status_label.setText(self.t.status_tag_updated.format(tags=tags_str))
 
     # ── Theme ────────────────────────────────────────────────────────────
 
@@ -813,7 +806,6 @@ class CCSessionManager(QMainWindow):
         self.is_dark = not self.is_dark
         self.theme_btn.setText("☀️" if self.is_dark else "🌙")
         self._apply_theme()
-        # Re-render preview if a session is selected
         if self.current_session:
             row = self.session_list.currentRow()
             if row >= 0:

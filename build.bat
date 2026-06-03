@@ -19,7 +19,7 @@ echo       Done.
 
 :: Build exe
 echo [2/3] Building exe...
-pyinstaller --onefile --windowed --name "CCSessionManager" --hidden-import theme --hidden-import parser --hidden-import metadata main.py
+pyinstaller --onefile --windowed --name "CCSessionManager" --hidden-import theme --hidden-import parser --hidden-import metadata --hidden-import i18n main.py
 echo       Done.
 
 :: Copy to project root for convenience

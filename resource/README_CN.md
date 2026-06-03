@@ -6,12 +6,13 @@
 
 ## 功能
 
-- 📋 **会话列表** — 自动扫描所有 Claude Code session，显示标题、时间、模型、token 用量
+- 📋 **会话列表** — 自动扫描所有 Claude Code session，显示 AI 生成的标题、时间、模型、token 用量
 - 🔍 **搜索过滤** — 按内容、项目路径、Session ID 搜索
 - 📁 **项目分组** — 左侧面板按项目分组浏览
 - ✏️ **自定义标题** — 双击标题即可修改，数据持久保存
-- 🏷 **标签系统** — 给 session 添加多个标签，按标签筛选
+- 🏷 **标签系统** — 给 session 添加多个标签，按标签筛选（AND 逻辑）
 - 🌙 **明暗主题** — GitHub 风格 UI，一键切换亮色/暗色
+- 🌐 **国际化** — 一键切换中英文界面
 - ▶ **快速恢复** — 一键在终端中执行 `claude --resume`
 
 ## 安装
@@ -37,7 +38,7 @@ build.bat
 
 ```bash
 pyinstaller --onefile --windowed --name "CCSessionManager" ^
-  --hidden-import theme --hidden-import parser --hidden-import metadata main.py
+  --hidden-import theme --hidden-import parser --hidden-import metadata --hidden-import i18n main.py
 ```
 
 打包结果在 `dist/CCSessionManager.exe`。
@@ -52,7 +53,8 @@ pyinstaller --onefile --windowed --name "CCSessionManager" ^
 | 勾选标签 | 筛选同时包含所有勾选标签的 session |
 | 搜索框 | 按内容、路径、ID 模糊搜索 |
 | 🌙/☀️ 按钮 | 切换亮色/暗色主题 |
-| 「显示子代理」勾选 | 是否显示 subagents 目录下的会话 |
+| EN/中 按钮 | 切换中英文语言 |
+| 子代理按钮 | 切换是否显示子代理会话 |
 
 ## 数据存储
 
@@ -73,6 +75,7 @@ pyinstaller --onefile --windowed --name "CCSessionManager" ^
 - Python 3.13 + PyQt5
 - PyInstaller 打包
 - GitHub 风格 QSS 主题
+- 内置国际化（中文 / 英文）
 
 ## 许可
 

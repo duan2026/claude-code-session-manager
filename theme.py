@@ -54,14 +54,42 @@ QMainWindow, QWidget {
     border-color: #0969da;
 }
 
-/* === Subagent Checkbox === */
-#subagentCb {
+/* === Language Toggle Button === */
+#langBtn {
+    background-color: transparent;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    padding: 6px 10px;
     font-size: 22px;
-    spacing: 6px;
+    font-weight: 700;
+    color: #0969da;
 }
-#subagentCb::indicator {
-    width: 22px;
-    height: 22px;
+#langBtn:hover {
+    background-color: #f6f8fa;
+    border-color: #0969da;
+}
+
+/* === Subagent Toggle Button === */
+#subagentBtn {
+    background-color: transparent;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 22px;
+    font-weight: 500;
+    color: #656d76;
+}
+#subagentBtn:hover {
+    border-color: #0969da;
+    color: #0969da;
+}
+#subagentBtn[active="true"] {
+    background-color: #0969da;
+    color: #ffffff;
+    border-color: #0969da;
+}
+#subagentBtn[active="true"]:hover {
+    background-color: #0550ae;
 }
 
 /* === Left Panel - Projects === */
@@ -330,14 +358,42 @@ QMainWindow, QWidget {
     border-color: #58a6ff;
 }
 
-/* === Subagent Checkbox === */
-#subagentCb {
+/* === Language Toggle Button === */
+#langBtn {
+    background-color: transparent;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 6px 10px;
     font-size: 22px;
-    spacing: 6px;
+    font-weight: 700;
+    color: #58a6ff;
 }
-#subagentCb::indicator {
-    width: 22px;
-    height: 22px;
+#langBtn:hover {
+    background-color: #21262d;
+    border-color: #58a6ff;
+}
+
+/* === Subagent Toggle Button === */
+#subagentBtn {
+    background-color: transparent;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 22px;
+    font-weight: 500;
+    color: #8b949e;
+}
+#subagentBtn:hover {
+    border-color: #58a6ff;
+    color: #58a6ff;
+}
+#subagentBtn[active="true"] {
+    background-color: #58a6ff;
+    color: #0d1117;
+    border-color: #58a6ff;
+}
+#subagentBtn[active="true"]:hover {
+    background-color: #388bfd;
 }
 
 /* === Left Panel - Projects === */

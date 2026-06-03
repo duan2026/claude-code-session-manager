@@ -2,16 +2,17 @@
 
 [中文文档](resource/README_CN.md) | English
 
-A lightweight GUI tool for managing Claude Code sessions — find and resume conversations quickly.
+A lightweight Windows GUI tool for managing Claude Code sessions — search, tag, rename, and resume conversations with ease.
 
 ## Features
 
-- 📋 **Session List** — Auto-scan all Claude Code sessions with title, time, model, and token usage
+- 📋 **Session List** — Auto-scan all Claude Code sessions with AI-generated titles, time, model, and token usage
 - 🔍 **Search & Filter** — Search by content, project path, or Session ID
 - 📁 **Project Grouping** — Browse sessions grouped by project in the left panel
 - ✏️ **Custom Titles** — Double-click any title to rename it; changes are persisted
-- 🏷 **Tag System** — Add multiple tags to sessions and filter by tags
+- 🏷 **Tag System** — Add multiple tags to sessions, filter by tags (AND logic)
 - 🌙 **Light/Dark Theme** — GitHub-style UI with one-click theme toggle
+- 🌐 **i18n** — Switch between Chinese and English with one click
 - ▶ **Quick Resume** — One-click to open a terminal and run `claude --resume`
 
 ## Installation
@@ -37,7 +38,7 @@ Or manually:
 
 ```bash
 pyinstaller --onefile --windowed --name "CCSessionManager" ^
-  --hidden-import theme --hidden-import parser --hidden-import metadata main.py
+  --hidden-import theme --hidden-import parser --hidden-import metadata --hidden-import i18n main.py
 ```
 
 The output will be at `dist/CCSessionManager.exe`.
@@ -47,12 +48,13 @@ The output will be at `dist/CCSessionManager.exe`.
 | Action | Description |
 |--------|-------------|
 | Double-click title | Edit session title |
-| Click "🏷 标签" button | Manage session tags (add/remove) |
+| Click "🏷 Tags" button | Manage session tags (add/remove) |
 | Left panel tabs | Switch between project list and tag filter |
 | Check tags | Filter sessions that have ALL checked tags |
 | Search bar | Fuzzy search by content, path, or ID |
 | 🌙/☀️ button | Toggle light/dark theme |
-| "显示子代理" checkbox | Show/hide subagent sessions |
+| EN/中 button | Switch language (Chinese/English) |
+| Subagents button | Toggle subagent sessions visibility |
 
 ## Data Storage
 
@@ -73,6 +75,7 @@ This tool does **NOT** modify any original Claude Code files.
 - Python 3.13 + PyQt5
 - PyInstaller for packaging
 - GitHub-style QSS themes
+- Built-in i18n (Chinese / English)
 
 ## License
 
