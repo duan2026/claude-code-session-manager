@@ -5,6 +5,7 @@ A lightweight GUI tool for managing Claude Code sessions.
 
 import sys
 import subprocess
+import ctypes
 from pathlib import Path
 from datetime import datetime
 
@@ -28,12 +29,13 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QFrame,
     QStackedWidget,
+    QRadioButton,
 )
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 
 from parser import Session, load_all_sessions, load_session_messages, search_sessions
-from metadata import set_title, set_tags, get_all_tags
+from metadata import set_title, set_tags, get_all_tags, load_metadata, save_metadata
 from theme import GITHUB_LIGHT, GITHUB_DARK
 from i18n import LANGS, Lang
 
@@ -236,6 +238,91 @@ class TagDialog(QDialog):
 
     def _accept(self):
         self.result_tags = [tag for tag, cb in self.tag_checks.items() if cb.isChecked()]
+        self.accept()
+
+
+# ─── Resume Dialog ──────────────────────────────────────────────────────────
+
+class ResumeDialog(QDialog):
+    """Dialog for choosing terminal type and privilege level."""
+
+    def __init__(self, lang: Lang, last_terminal: str, last_admin: bool, parent=None):
+        super().__init__(parent)
+        self.lang = lang
+        self.terminal = last_terminal  # "wt" or "cmd"
+        self.as_admin = last_admin
+        self._build_ui()
+
+    def _build_ui(self):
+        t = self.lang
+        self.setWindowTitle(t.resume_dialog_title)
+        self.setMinimumWidth(420)
+        self.setFixedHeight(300)
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+
+        # Terminal type
+        layout.addWidget(QLabel(t.resume_terminal_type))
+        term_row = QHBoxLayout()
+        term_row.setSpacing(8)
+
+        self.wt_btn = QPushButton(t.resume_wt)
+        self.wt_btn.setObjectName("leftTabBtn")
+        self.wt_btn.setProperty("active", self.terminal == "wt")
+        self.wt_btn.clicked.connect(lambda: self._select_terminal("wt"))
+
+        self.cmd_btn = QPushButton(t.resume_cmd)
+        self.cmd_btn.setObjectName("leftTabBtn")
+        self.cmd_btn.setProperty("active", self.terminal == "cmd")
+        self.cmd_btn.clicked.connect(lambda: self._select_terminal("cmd"))
+
+        term_row.addWidget(self.wt_btn)
+        term_row.addWidget(self.cmd_btn)
+        term_row.addStretch()
+        layout.addLayout(term_row)
+
+        # Privilege
+        layout.addWidget(QLabel(t.resume_privilege))
+        priv_row = QHBoxLayout()
+        priv_row.setSpacing(16)
+
+        self.user_radio = QRadioButton(t.resume_user)
+        self.admin_radio = QRadioButton(t.resume_admin)
+        if self.as_admin:
+            self.admin_radio.setChecked(True)
+        else:
+            self.user_radio.setChecked(True)
+
+        priv_row.addWidget(self.user_radio)
+        priv_row.addWidget(self.admin_radio)
+        priv_row.addStretch()
+        layout.addLayout(priv_row)
+
+        layout.addStretch()
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        cancel_btn = QPushButton(t.resume_cancel)
+        cancel_btn.clicked.connect(self.reject)
+        open_btn = QPushButton(t.resume_open)
+        open_btn.setObjectName("primaryBtn")
+        open_btn.clicked.connect(self._accept)
+        btn_row.addStretch()
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(open_btn)
+        layout.addLayout(btn_row)
+
+    def _select_terminal(self, term: str):
+        self.terminal = term
+        self.wt_btn.setProperty("active", term == "wt")
+        self.cmd_btn.setProperty("active", term == "cmd")
+        self.wt_btn.style().unpolish(self.wt_btn)
+        self.wt_btn.style().polish(self.wt_btn)
+        self.cmd_btn.style().unpolish(self.cmd_btn)
+        self.cmd_btn.style().polish(self.cmd_btn)
+
+    def _accept(self):
+        self.as_admin = self.admin_radio.isChecked()
         self.accept()
 
 
@@ -738,19 +825,50 @@ class CCSessionManager(QMainWindow):
         cmd = f"claude --resume {s.session_id}"
         cwd = s.cwd if s.cwd and Path(s.cwd).exists() else str(Path.home())
 
+        # Load last choices
+        meta = load_metadata()
+        last_terminal = meta.get("_resume_terminal", "wt")
+        last_admin = meta.get("_resume_admin", False)
+
+        dialog = ResumeDialog(self.t, last_terminal, last_admin, self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        terminal = dialog.terminal
+        as_admin = dialog.as_admin
+
+        # Save choices for next time
+        meta = load_metadata()
+        meta["_resume_terminal"] = terminal
+        meta["_resume_admin"] = as_admin
+        save_metadata(meta)
+
         try:
-            subprocess.Popen(
-                ["wt.exe", "-d", cwd, "--", "cmd.exe", "/k", cmd],
-                cwd=cwd,
-            )
-        except FileNotFoundError:
-            try:
-                subprocess.Popen(
-                    ["cmd.exe", "/k", f'cd /d "{cwd}" && {cmd}'],
-                    cwd=cwd,
-                )
-            except Exception as e:
-                QMessageBox.warning(self, "Error", self.t.error_terminal.format(err=e))
+            if terminal == "wt":
+                if as_admin:
+                    # Run wt.exe as admin via ShellExecute
+                    args = f'-d "{cwd}" -- cmd.exe /k {cmd}'
+                    ctypes.windll.shell32.ShellExecuteW(
+                        None, "runas", "wt.exe", args, cwd, 1
+                    )
+                else:
+                    subprocess.Popen(
+                        ["wt.exe", "-d", cwd, "--", "cmd.exe", "/k", cmd],
+                        cwd=cwd,
+                    )
+            else:  # cmd
+                if as_admin:
+                    args = f'/k cd /d "{cwd}" && {cmd}'
+                    ctypes.windll.shell32.ShellExecuteW(
+                        None, "runas", "cmd.exe", args, cwd, 1
+                    )
+                else:
+                    subprocess.Popen(
+                        ["cmd.exe", "/k", f'cd /d "{cwd}" && {cmd}'],
+                        cwd=cwd,
+                    )
+        except Exception as e:
+            QMessageBox.warning(self, "Error", self.t.error_terminal.format(err=e))
 
     def _copy_resume_cmd(self):
         if not self.current_session:

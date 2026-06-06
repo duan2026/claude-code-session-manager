@@ -62,6 +62,17 @@ class Lang:
     edit_title_dialog: str
     edit_title_prompt: str
 
+    # Resume dialog
+    resume_dialog_title: str
+    resume_terminal_type: str
+    resume_wt: str
+    resume_cmd: str
+    resume_privilege: str
+    resume_user: str
+    resume_admin: str
+    resume_cancel: str
+    resume_open: str
+
     # Delete dialog
     delete_title: str
     delete_message: str
@@ -116,6 +127,15 @@ ZH = Lang(
     tag_no_tags="暂无标签",
     edit_title_dialog="编辑标题",
     edit_title_prompt="输入新标题:",
+    resume_dialog_title="🖥 打开终端",
+    resume_terminal_type="终端类型：",
+    resume_wt="Windows Terminal",
+    resume_cmd="CMD",
+    resume_privilege="运行权限：",
+    resume_user="普通用户",
+    resume_admin="管理员",
+    resume_cancel="取消",
+    resume_open="打开",
     delete_title="确认删除",
     delete_message="确定要删除这个 session 吗？",
     delete_file="文件:",
@@ -165,6 +185,15 @@ EN = Lang(
     tag_no_tags="No tags yet",
     edit_title_dialog="Edit Title",
     edit_title_prompt="Enter new title:",
+    resume_dialog_title="🖥 Open Terminal",
+    resume_terminal_type="Terminal:",
+    resume_wt="Windows Terminal",
+    resume_cmd="CMD",
+    resume_privilege="Privilege:",
+    resume_user="User",
+    resume_admin="Admin",
+    resume_cancel="Cancel",
+    resume_open="Open",
     delete_title="Confirm Delete",
     delete_message="Are you sure you want to delete this session?",
     delete_file="File:",
