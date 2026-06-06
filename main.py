@@ -34,7 +34,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 
-from parser import Session, load_all_sessions, load_session_messages, search_sessions
+from parser import (
+    Session, load_all_sessions, load_session_messages, search_sessions,
+    load_all_codex_sessions, load_codex_session_messages,
+    load_all_opencode_sessions, load_opencode_session_messages,
+)
 from metadata import set_title, set_tags, get_all_tags, load_metadata, save_metadata
 from theme import GITHUB_LIGHT, GITHUB_DARK
 from i18n import LANGS, Lang
@@ -89,8 +93,17 @@ class SessionLoader(QThread):
     """Load sessions in background to keep UI responsive."""
     loaded = pyqtSignal(list)
 
+    def __init__(self):
+        super().__init__()
+        self.tool = "claude"
+
     def run(self):
-        sessions = load_all_sessions()
+        if self.tool == "codex":
+            sessions = load_all_codex_sessions()
+        elif self.tool == "opencode":
+            sessions = load_all_opencode_sessions()
+        else:
+            sessions = load_all_sessions()
         self.loaded.emit(sessions)
 
 
@@ -340,6 +353,7 @@ class CCSessionManager(QMainWindow):
         self.selected_tags: set[str] = set()
         self.lang_code = "zh"
         self.t = LANGS[self.lang_code]
+        self.current_tool = "claude"  # "claude", "codex", or "opencode"
 
         self._init_ui()
         self._load_sessions()
@@ -357,6 +371,34 @@ class CCSessionManager(QMainWindow):
         root = QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
+        # ── Tool tab bar ────────────────────────────────────────────────
+        tool_bar = QWidget()
+        tool_bar.setObjectName("toolBar")
+        tool_layout = QHBoxLayout(tool_bar)
+        tool_layout.setContentsMargins(16, 4, 16, 0)
+        tool_layout.setSpacing(0)
+
+        self.claude_tab = QPushButton("Claude Code")
+        self.claude_tab.setObjectName("toolTabBtn")
+        self.claude_tab.setProperty("active", True)
+        self.claude_tab.clicked.connect(lambda: self._switch_tool("claude"))
+
+        self.codex_tab = QPushButton("Codex")
+        self.codex_tab.setObjectName("toolTabBtn")
+        self.codex_tab.setProperty("active", False)
+        self.codex_tab.clicked.connect(lambda: self._switch_tool("codex"))
+
+        self.opencode_tab = QPushButton("OpenCode")
+        self.opencode_tab.setObjectName("toolTabBtn")
+        self.opencode_tab.setProperty("active", False)
+        self.opencode_tab.clicked.connect(lambda: self._switch_tool("opencode"))
+
+        tool_layout.addWidget(self.claude_tab)
+        tool_layout.addWidget(self.codex_tab)
+        tool_layout.addWidget(self.opencode_tab)
+        tool_layout.addStretch()
+        root.addWidget(tool_bar)
 
         # ── Top bar ─────────────────────────────────────────────────────
         top_bar = QWidget()
@@ -545,6 +587,24 @@ class CCSessionManager(QMainWindow):
         self.lang_btn.setText("中" if self.lang_code == "en" else "EN")
         self._refresh_ui_text()
 
+    def _switch_tool(self, tool: str):
+        """Switch between Claude Code, Codex, and OpenCode."""
+        if tool == self.current_tool:
+            return
+        self.current_tool = tool
+        self.claude_tab.setProperty("active", tool == "claude")
+        self.codex_tab.setProperty("active", tool == "codex")
+        self.opencode_tab.setProperty("active", tool == "opencode")
+        self.claude_tab.style().unpolish(self.claude_tab)
+        self.claude_tab.style().polish(self.claude_tab)
+        self.codex_tab.style().unpolish(self.codex_tab)
+        self.codex_tab.style().polish(self.codex_tab)
+        self.opencode_tab.style().unpolish(self.opencode_tab)
+        self.opencode_tab.style().polish(self.opencode_tab)
+        # Show/hide subagent button (only for Claude Code)
+        self.subagent_btn.setVisible(tool == "claude")
+        self._load_sessions()
+
     def _refresh_ui_text(self):
         """Update all visible text after language switch."""
         t = self.t
@@ -594,6 +654,7 @@ class CCSessionManager(QMainWindow):
     def _load_sessions(self):
         self.status_label.setText(self.t.status_loading)
         self._loader = SessionLoader()
+        self._loader.tool = self.current_tool
         self._loader.loaded.connect(self._on_sessions_loaded)
         self._loader.start()
 
@@ -763,7 +824,12 @@ class CCSessionManager(QMainWindow):
         session = self.filtered_sessions[row]
         self.current_session = session
 
-        messages = load_session_messages(session.file_path)
+        if self.current_tool == "codex":
+            messages = load_codex_session_messages(session.file_path)
+        elif self.current_tool == "opencode":
+            messages = load_opencode_session_messages(session.file_path)
+        else:
+            messages = load_session_messages(session.file_path)
 
         is_dark = self.is_dark
         user_bg = "#161b22" if is_dark else "#f6f8fa"
@@ -822,7 +888,12 @@ class CCSessionManager(QMainWindow):
             return
 
         s = self.current_session
-        cmd = f"claude --resume {s.session_id}"
+        if self.current_tool == "codex":
+            cmd = f"codex resume {s.session_id}"
+        elif self.current_tool == "opencode":
+            cmd = f"opencode --session {s.session_id}"
+        else:
+            cmd = f"claude --resume {s.session_id}"
         cwd = s.cwd if s.cwd and Path(s.cwd).exists() else str(Path.home())
 
         # Load last choices
@@ -874,7 +945,12 @@ class CCSessionManager(QMainWindow):
         if not self.current_session:
             return
 
-        cmd = f"claude --resume {self.current_session.session_id}"
+        if self.current_tool == "codex":
+            cmd = f"codex resume {self.current_session.session_id}"
+        elif self.current_tool == "opencode":
+            cmd = f"opencode --session {self.current_session.session_id}"
+        else:
+            cmd = f"claude --resume {self.current_session.session_id}"
         QApplication.clipboard().setText(cmd)
         self.status_label.setText(self.t.status_copied.format(cmd=cmd))
 

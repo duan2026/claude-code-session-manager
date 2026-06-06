@@ -51,6 +51,8 @@ def get_tags(session_id: str) -> list[str]:
     """Get tags for a session."""
     data = load_metadata()
     entry = data.get(session_id, {})
+    if not isinstance(entry, dict):
+        return []
     return entry.get("tags", [])
 
 
@@ -68,6 +70,8 @@ def get_all_tags() -> list[str]:
     data = load_metadata()
     tags_set: set[str] = set()
     for entry in data.values():
+        if not isinstance(entry, dict):
+            continue
         for tag in entry.get("tags", []):
             tags_set.add(tag)
     return sorted(tags_set)

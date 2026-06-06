@@ -19,6 +19,32 @@ QMainWindow, QWidget {
     padding: 14px 20px;
 }
 
+/* === Tool Tab Bar === */
+#toolBar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #d0d7de;
+}
+#toolTabBtn {
+    background-color: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    padding: 10px 20px;
+    font-size: 26px;
+    font-weight: 500;
+    color: #656d76;
+}
+#toolTabBtn:hover {
+    color: #1f2328;
+    background-color: transparent;
+    border-color: transparent;
+}
+#toolTabBtn[active="true"] {
+    color: #1f2328;
+    font-weight: 700;
+    border-bottom-color: #0969da;
+}
+
 #titleLabel {
     font-size: 36px;
     font-weight: 700;
