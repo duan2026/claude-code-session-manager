@@ -192,7 +192,14 @@ def load_session_messages(file_path: str) -> list[tuple[str, str]]:
 
 def load_all_sessions() -> list[Session]:
     """Load metadata for all sessions across all projects."""
-    projects_dir = Path.home() / ".claude" / "projects"
+    from metadata import get_settings
+    settings = get_settings()
+
+    if settings.get("claude_path"):
+        projects_dir = Path(settings["claude_path"])
+    else:
+        projects_dir = Path.home() / ".claude" / "projects"
+
     if not projects_dir.exists():
         return []
 
@@ -327,7 +334,14 @@ def load_opencode_session_messages(file_path: str) -> list[tuple[str, str]]:
 
 def load_all_opencode_sessions() -> list[Session]:
     """Load metadata for all OpenCode sessions."""
-    session_dir = OPENCODE_DIR / "session"
+    from metadata import get_settings
+    settings = get_settings()
+
+    if settings.get("opencode_path"):
+        session_dir = Path(settings["opencode_path"])
+    else:
+        session_dir = OPENCODE_DIR / "session"
+
     if not session_dir.exists():
         return []
 
@@ -561,7 +575,14 @@ def load_codex_index_titles() -> dict[str, str]:
 
 def load_all_codex_sessions() -> list[Session]:
     """Load metadata for all Codex sessions."""
-    sessions_dir = Path.home() / ".codex" / "sessions"
+    from metadata import get_settings
+    settings = get_settings()
+
+    if settings.get("codex_path"):
+        sessions_dir = Path(settings["codex_path"])
+    else:
+        sessions_dir = Path.home() / ".codex" / "sessions"
+
     if not sessions_dir.exists():
         return []
 

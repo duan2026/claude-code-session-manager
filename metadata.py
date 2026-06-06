@@ -75,3 +75,32 @@ def get_all_tags() -> list[str]:
         for tag in entry.get("tags", []):
             tags_set.add(tag)
     return sorted(tags_set)
+
+
+# ─── Settings ────────────────────────────────────────────────────────────────
+
+DEFAULT_SETTINGS = {
+    "claude_path": "",
+    "codex_path": "",
+    "opencode_path": "",
+}
+
+
+def get_settings() -> dict:
+    """Load app settings from metadata file."""
+    data = load_metadata()
+    settings = data.get("_settings", {})
+    if not isinstance(settings, dict):
+        settings = {}
+    # Fill defaults for missing keys
+    for key, default in DEFAULT_SETTINGS.items():
+        if key not in settings:
+            settings[key] = default
+    return settings
+
+
+def save_settings(settings: dict):
+    """Save app settings to metadata file."""
+    data = load_metadata()
+    data["_settings"] = settings
+    save_metadata(data)

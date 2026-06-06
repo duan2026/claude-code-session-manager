@@ -73,6 +73,20 @@ class Lang:
     resume_cancel: str
     resume_open: str
 
+    # Settings dialog
+    settings_dialog_title: str
+    settings_claude_path: str
+    settings_codex_path: str
+    settings_opencode_path: str
+    settings_browse: str
+    settings_reset: str
+    settings_save: str
+    settings_cancel: str
+    settings_restart_hint: str
+
+    # Refresh button
+    btn_refresh: str
+
     # Delete dialog
     delete_title: str
     delete_message: str
@@ -136,6 +150,16 @@ ZH = Lang(
     resume_admin="管理员",
     resume_cancel="取消",
     resume_open="打开",
+    settings_dialog_title="⚙ 设置",
+    settings_claude_path="Claude Code 路径：",
+    settings_codex_path="Codex 路径：",
+    settings_opencode_path="OpenCode 路径：",
+    settings_browse="浏览",
+    settings_reset="恢复默认",
+    settings_save="保存",
+    settings_cancel="取消",
+    settings_restart_hint="路径更改后点击刷新按钮生效",
+    btn_refresh="🔄 刷新",
     delete_title="确认删除",
     delete_message="确定要删除这个 session 吗？",
     delete_file="文件:",
@@ -194,6 +218,16 @@ EN = Lang(
     resume_admin="Admin",
     resume_cancel="Cancel",
     resume_open="Open",
+    settings_dialog_title="⚙ Settings",
+    settings_claude_path="Claude Code path:",
+    settings_codex_path="Codex path:",
+    settings_opencode_path="OpenCode path:",
+    settings_browse="Browse",
+    settings_reset="Reset Default",
+    settings_save="Save",
+    settings_cancel="Cancel",
+    settings_restart_hint="Click refresh button after changing paths",
+    btn_refresh="🔄 Refresh",
     delete_title="Confirm Delete",
     delete_message="Are you sure you want to delete this session?",
     delete_file="File:",

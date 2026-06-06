@@ -30,6 +30,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QStackedWidget,
     QRadioButton,
+    QFileDialog,
 )
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
@@ -39,7 +40,7 @@ from parser import (
     load_all_codex_sessions, load_codex_session_messages,
     load_all_opencode_sessions, load_opencode_session_messages,
 )
-from metadata import set_title, set_tags, get_all_tags, load_metadata, save_metadata
+from metadata import set_title, set_tags, get_all_tags, load_metadata, save_metadata, get_settings, save_settings
 from theme import GITHUB_LIGHT, GITHUB_DARK
 from i18n import LANGS, Lang
 
@@ -339,6 +340,131 @@ class ResumeDialog(QDialog):
         self.accept()
 
 
+# ─── Settings Dialog ────────────────────────────────────────────────────────
+
+class SettingsDialog(QDialog):
+    """Dialog for configuring custom installation paths."""
+
+    def __init__(self, lang: Lang, parent=None):
+        super().__init__(parent)
+        self.lang = lang
+        self.settings = get_settings()
+        self._build_ui()
+
+    def _build_ui(self):
+        t = self.lang
+        self.setWindowTitle(t.settings_dialog_title)
+        self.setMinimumWidth(520)
+        self.setMaximumWidth(600)
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 16)
+
+        from pathlib import Path
+        home = str(Path.home())
+
+        # Claude Code section
+        self.claude_edit = self._card_section(
+            layout, "🟠 Claude Code",
+            t.settings_claude_path,
+            self.settings.get("claude_path", ""),
+            f"{home}\\.claude\\projects"
+        )
+
+        # Codex section
+        self.codex_edit = self._card_section(
+            layout, "🟢 Codex",
+            t.settings_codex_path,
+            self.settings.get("codex_path", ""),
+            f"{home}\\.codex\\sessions"
+        )
+
+        # OpenCode section
+        self.opencode_edit = self._card_section(
+            layout, "🔵 OpenCode",
+            t.settings_opencode_path,
+            self.settings.get("opencode_path", ""),
+            f"{home}\\.local\\share\\opencode\\storage\\session"
+        )
+
+        # Hint
+        hint = QLabel(t.settings_restart_hint)
+        hint.setObjectName("cardMeta")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        layout.addStretch()
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+        reset_btn = QPushButton(t.settings_reset)
+        reset_btn.clicked.connect(self._reset_defaults)
+        cancel_btn = QPushButton(t.settings_cancel)
+        cancel_btn.clicked.connect(self.reject)
+        save_btn = QPushButton(t.settings_save)
+        save_btn.setObjectName("primaryBtn")
+        save_btn.clicked.connect(self._save)
+        btn_row.addWidget(reset_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(save_btn)
+        layout.addLayout(btn_row)
+
+    def _card_section(self, parent_layout, title, label_text, current_value, default_path) -> QLineEdit:
+        """Create a card-style section with title, label, input + browse button."""
+        card = QFrame()
+        card.setObjectName("settingsCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(14, 10, 14, 10)
+        card_layout.setSpacing(6)
+
+        # Section title
+        header = QLabel(title)
+        header.setObjectName("cardTitle")
+        card_layout.addWidget(header)
+
+        # Label
+        label = QLabel(label_text)
+        label.setObjectName("cardMeta")
+        card_layout.addWidget(label)
+
+        # Input + browse row
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        edit = QLineEdit(current_value)
+        edit.setPlaceholderText(f"默认: {default_path}")
+        edit.setMinimumHeight(40)
+        browse_btn = QPushButton(self.lang.settings_browse)
+        browse_btn.setFixedWidth(80)
+        browse_btn.clicked.connect(lambda: self._browse(edit, title))
+        row.addWidget(edit, 1)
+        row.addWidget(browse_btn)
+        card_layout.addLayout(row)
+
+        parent_layout.addWidget(card)
+        return edit
+
+    def _browse(self, edit: QLineEdit, hint: str):
+        path = QFileDialog.getExistingDirectory(self, hint)
+        if path:
+            edit.setText(path)
+
+    def _reset_defaults(self):
+        self.claude_edit.clear()
+        self.codex_edit.clear()
+        self.opencode_edit.clear()
+
+    def _save(self):
+        self.settings = {
+            "claude_path": self.claude_edit.text().strip(),
+            "codex_path": self.codex_edit.text().strip(),
+            "opencode_path": self.opencode_edit.text().strip(),
+        }
+        save_settings(self.settings)
+        self.accept()
+
+
 # ─── Main Window ────────────────────────────────────────────────────────────
 
 class CCSessionManager(QMainWindow):
@@ -372,13 +498,13 @@ class CCSessionManager(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Tool tab bar ────────────────────────────────────────────────
-        tool_bar = QWidget()
-        tool_bar.setObjectName("toolBar")
-        tool_layout = QHBoxLayout(tool_bar)
-        tool_layout.setContentsMargins(16, 4, 16, 0)
-        tool_layout.setSpacing(0)
+        # ── Unified top bar (tabs + search + actions) ───────────────────
+        top_bar = QWidget()
+        top_bar.setObjectName("topBar")
+        top_layout = QHBoxLayout(top_bar)
+        top_layout.setContentsMargins(16, 8, 16, 8)
 
+        # Left: tool tabs (card-style)
         self.claude_tab = QPushButton("Claude Code")
         self.claude_tab.setObjectName("toolTabBtn")
         self.claude_tab.setProperty("active", True)
@@ -394,25 +520,28 @@ class CCSessionManager(QMainWindow):
         self.opencode_tab.setProperty("active", False)
         self.opencode_tab.clicked.connect(lambda: self._switch_tool("opencode"))
 
-        tool_layout.addWidget(self.claude_tab)
-        tool_layout.addWidget(self.codex_tab)
-        tool_layout.addWidget(self.opencode_tab)
-        tool_layout.addStretch()
-        root.addWidget(tool_bar)
-
-        # ── Top bar ─────────────────────────────────────────────────────
-        top_bar = QWidget()
-        top_bar.setObjectName("topBar")
-        top_layout = QHBoxLayout(top_bar)
-        top_layout.setContentsMargins(16, 8, 16, 8)
-
-        self.title_label = QLabel(t.app_title)
-        self.title_label.setObjectName("titleLabel")
-
+        # Center: search
         self.search_bar = QLineEdit()
         self.search_bar.setObjectName("searchBar")
         self.search_bar.setPlaceholderText(t.search_placeholder)
         self.search_bar.textChanged.connect(self._on_search)
+
+        # Right: utility buttons
+        self.subagent_btn = QPushButton(t.btn_subagent_off)
+        self.subagent_btn.setObjectName("subagentBtn")
+        self.subagent_btn.setToolTip(t.subagents_tooltip)
+        self.subagent_btn.setProperty("active", False)
+        self.subagent_btn.clicked.connect(self._toggle_subagents)
+
+        self.refresh_btn = QPushButton(t.btn_refresh)
+        self.refresh_btn.setObjectName("refreshBtn")
+        self.refresh_btn.setToolTip("刷新会话列表")
+        self.refresh_btn.clicked.connect(self._load_sessions)
+
+        self.settings_btn = QPushButton("⚙")
+        self.settings_btn.setObjectName("settingsBtn")
+        self.settings_btn.setToolTip("设置")
+        self.settings_btn.clicked.connect(self._open_settings)
 
         self.lang_btn = QPushButton("EN")
         self.lang_btn.setObjectName("langBtn")
@@ -426,18 +555,16 @@ class CCSessionManager(QMainWindow):
         self.theme_btn.setToolTip(t.theme_tooltip)
         self.theme_btn.clicked.connect(self._toggle_theme)
 
-        self.subagent_btn = QPushButton(t.btn_subagent_off)
-        self.subagent_btn.setObjectName("subagentBtn")
-        self.subagent_btn.setToolTip(t.subagents_tooltip)
-        self.subagent_btn.setProperty("active", False)
-        self.subagent_btn.clicked.connect(self._toggle_subagents)
-
-        top_layout.addWidget(self.title_label)
+        # Layout: [Tabs] spacing [Search(flex)] spacing [Buttons]
+        top_layout.addWidget(self.claude_tab)
+        top_layout.addWidget(self.codex_tab)
+        top_layout.addWidget(self.opencode_tab)
         top_layout.addSpacing(16)
         top_layout.addWidget(self.search_bar, 1)
-        top_layout.addSpacing(8)
+        top_layout.addSpacing(12)
         top_layout.addWidget(self.subagent_btn)
-        top_layout.addSpacing(4)
+        top_layout.addWidget(self.refresh_btn)
+        top_layout.addWidget(self.settings_btn)
         top_layout.addWidget(self.lang_btn)
         top_layout.addWidget(self.theme_btn)
 
@@ -610,7 +737,6 @@ class CCSessionManager(QMainWindow):
         t = self.t
 
         self.setWindowTitle(t.window_title)
-        self.title_label.setText(t.app_title)
         self.search_bar.setPlaceholderText(t.search_placeholder)
         self.theme_btn.setToolTip(t.theme_tooltip)
         self.subagent_btn.setToolTip(t.subagents_tooltip)
@@ -1008,6 +1134,12 @@ class CCSessionManager(QMainWindow):
     def _apply_theme(self):
         theme = GITHUB_DARK if self.is_dark else GITHUB_LIGHT
         self.setStyleSheet(theme)
+
+    def _open_settings(self):
+        dialog = SettingsDialog(self.t, self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.status_label.setText("✅ 设置已保存，正在刷新...")
+            self._load_sessions()
 
 
 # ─── Entry Point ────────────────────────────────────────────────────────────

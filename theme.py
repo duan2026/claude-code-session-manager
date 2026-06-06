@@ -16,39 +16,27 @@ QMainWindow, QWidget {
 #topBar {
     background-color: #ffffff;
     border-bottom: 1px solid #d0d7de;
-    padding: 14px 20px;
 }
 
-/* === Tool Tab Bar === */
-#toolBar {
-    background-color: #ffffff;
-    border-bottom: 1px solid #d0d7de;
-}
+/* === Tool Tab Buttons (card-style) === */
 #toolTabBtn {
     background-color: transparent;
-    border: none;
-    border-bottom: 3px solid transparent;
-    border-radius: 0;
-    padding: 10px 20px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 8px 16px;
     font-size: 26px;
     font-weight: 500;
     color: #656d76;
 }
 #toolTabBtn:hover {
-    color: #1f2328;
-    background-color: transparent;
-    border-color: transparent;
+    background-color: #f6f8fa;
+    border-color: #d0d7de;
 }
 #toolTabBtn[active="true"] {
-    color: #1f2328;
+    background-color: #0969da;
+    color: #ffffff;
+    border-color: #0969da;
     font-weight: 700;
-    border-bottom-color: #0969da;
-}
-
-#titleLabel {
-    font-size: 36px;
-    font-weight: 700;
-    color: #1f2328;
 }
 
 /* === Search Bar === */
@@ -116,6 +104,21 @@ QMainWindow, QWidget {
 }
 #subagentBtn[active="true"]:hover {
     background-color: #0550ae;
+}
+
+/* === Refresh & Settings Buttons === */
+#refreshBtn, #settingsBtn {
+    background-color: transparent;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 22px;
+    color: #656d76;
+}
+#refreshBtn:hover, #settingsBtn:hover {
+    background-color: #f6f8fa;
+    border-color: #0969da;
+    color: #0969da;
 }
 
 /* === Left Panel - Projects === */
@@ -331,6 +334,13 @@ QSplitter::handle {
     background-color: transparent;
     border: none;
 }
+
+/* === Settings Card === */
+#settingsCard {
+    background-color: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+}
 """
 
 GITHUB_DARK = """
@@ -346,13 +356,27 @@ QMainWindow, QWidget {
 #topBar {
     background-color: #0d1117;
     border-bottom: 1px solid #30363d;
-    padding: 14px 20px;
 }
 
-#titleLabel {
-    font-size: 36px;
+/* === Tool Tab Buttons (card-style) === */
+#toolTabBtn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 26px;
+    font-weight: 500;
+    color: #8b949e;
+}
+#toolTabBtn:hover {
+    background-color: #21262d;
+    border-color: #30363d;
+}
+#toolTabBtn[active="true"] {
+    background-color: #58a6ff;
+    color: #0d1117;
+    border-color: #58a6ff;
     font-weight: 700;
-    color: #e6edf3;
 }
 
 /* === Search Bar === */
@@ -420,6 +444,21 @@ QMainWindow, QWidget {
 }
 #subagentBtn[active="true"]:hover {
     background-color: #388bfd;
+}
+
+/* === Refresh & Settings Buttons === */
+#refreshBtn, #settingsBtn {
+    background-color: transparent;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 22px;
+    color: #8b949e;
+}
+#refreshBtn:hover, #settingsBtn:hover {
+    background-color: #21262d;
+    border-color: #58a6ff;
+    color: #58a6ff;
 }
 
 /* === Left Panel - Projects === */
@@ -634,5 +673,12 @@ QSplitter::handle {
 #tagScroll {
     background-color: transparent;
     border: none;
+}
+
+/* === Settings Card === */
+#settingsCard {
+    background-color: #f6f8fa;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
 }
 """
